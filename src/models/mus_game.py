@@ -290,9 +290,6 @@ class MusGame:
         elif repeticiones == [2, 1, 1]:
             # Par
             carta_par = max(conteo.keys(), key=lambda x: conteo[x])
-            # La carta secundaria es la mejor de las cartas sueltas
-            cartas_sueltas = [carta for carta, count in conteo.items() if count == 1]
-            mejor_carta_suelta = min(cartas_sueltas, key=lambda x: self.ORDEN_CARTAS.index(x))
             return (2, self.ORDEN_CARTAS.index(carta_par), float('inf'))
         
         else:
@@ -308,9 +305,9 @@ class MusGame:
         valor2 = self.obtener_valor_par(mano2)
         
         # Comparar tipo de par primero
-        if valor1[0] > valor2[0]:
+        if valor1[0] < valor2[0]:
             return 1
-        elif valor1[0] < valor2[0]:
+        elif valor1[0] > valor2[0]:
             return -1
         else:
             # Mismo tipo de par
@@ -319,24 +316,24 @@ class MusGame:
                 return 0
             elif (valor1[0] == 2 or valor1[0] == 1):
                 # Si ambas son "Par" o "Medias", ganan los mas grandes
-                if valor1[1] > valor2[1]:
+                if valor1[1] < valor2[1]:
                     return 1
-                elif valor1[1] < valor2[1]:
+                elif valor1[1] > valor2[1]:
                     return -1
                 else:
                     # Si ambas son "Par" con misma carta principal, empate
                     return 0
             else:
                 # Si ambas son "Duples", ganan las cartas con mayor valor
-                if valor1[1] > valor2[1]:
+                if valor1[1] < valor2[1]:
                     return 1
-                elif valor1[1] < valor2[1]:
+                elif valor1[1] > valor2[1]:
                     return -1
                 else:
                     # Si ambas son "Duples" con misma carta principal, se mira la secundaria
-                    if valor1[2] > valor2[2]:
+                    if valor1[2] < valor2[2]:
                         return 1
-                    elif valor1[2] < valor2[2]:
+                    elif valor1[2] > valor2[2]:
                         return -1
                     else:
                         # Si ambas son "Duples" con misma carta principal y segunda, empate
