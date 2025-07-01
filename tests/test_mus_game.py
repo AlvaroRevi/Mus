@@ -57,6 +57,10 @@ class TestMusGame(unittest.TestCase):
         self.assertGreater(prob_mixta, 0)
         self.assertLess(prob_mixta, 1)
 
+        prob_solomillo_esperada = 0.03814421709158551
+        prob_solomillo_real = self.mus_game.calcular_probabilidad_mano("RRRA")
+        self.assertAlmostEqual(prob_solomillo_esperada, prob_solomillo_esperada, places=10)
+
     def test_calcular_probabilidad_suma_total(self):
         """Test que verifica que la suma de todas las probabilidades es 1"""
         df = self.mus_game.generar_matriz_probabilidades()
@@ -108,7 +112,8 @@ class TestMusGame(unittest.TestCase):
         self.assertIsInstance(df, pd.DataFrame)
 
         # Verificar columnas esperadas
-        columnas_esperadas = ['Mano', 'Probabilidad', 'Puntos_de_juego', 'Pares']
+        columnas_esperadas = ['Mano', 'Probabilidad', 'Puntos_de_juego', 'Pares',
+                              'Ranking_Grandes','Ranking_Chica','Ranking_Pares','Ranking_Juego']
         self.assertEqual(list(df.columns), columnas_esperadas)
 
         # Verificar que no está vacío
@@ -139,9 +144,60 @@ class TestMusGame(unittest.TestCase):
         # Verificar que todos los puntos son positivos
         self.assertTrue((df['Puntos_de_juego'] > 0).all())
 
+        # Verificar que todos los puntos son 40 como maximo
+        self.assertTrue((df['Puntos_de_juego'] <= 40).all())
+
         # Verificar que todos los tipos de pares son válidos
         tipos_pares_validos = {'Duples', 'Medias', 'Par', 'Nada'}
         self.assertTrue(set(df['Pares'].unique()).issubset(tipos_pares_validos))
+
+    def test_comparar_grandes(self):
+        self.assertEqual(self.mus_game.comparar_grandes('RRCA','RRAA'),1)
+        self.assertEqual(self.mus_game.comparar_grandes('RCCA', '76AA'), 1)
+        self.assertEqual(self.mus_game.comparar_grandes('RRRA', '76AA'), 1)
+        self.assertEqual(self.mus_game.comparar_grandes('RCCA', 'RRAA'), -1)
+        self.assertEqual(self.mus_game.comparar_grandes('CCSA', 'RAAA'), -1)
+        self.assertEqual(self.mus_game.comparar_grandes('C44A', 'C54A'), -1)
+        self.assertEqual(self.mus_game.comparar_grandes('RCCA', 'RACC'), 0)
+        self.assertEqual(self.mus_game.comparar_grandes('RRRR', 'CCCC'), 1)
+        self.assertEqual(self.mus_game.comparar_grandes('CSSA', 'CSS7'), -1)
+
+    def test_comparar_chica(self):
+        self.assertEqual(self.mus_game.comparar_chica('RRAA','764A'),1)
+        self.assertEqual(self.mus_game.comparar_chica('RAAA', '44AA'), 1)
+        self.assertEqual(self.mus_game.comparar_chica('RCA5', 'AA4R'), -1)
+        self.assertEqual(self.mus_game.comparar_chica('AA67', 'AA56'), -1)
+        self.assertEqual(self.mus_game.comparar_chica('A467', 'AA56'), -1)
+        self.assertEqual(self.mus_game.comparar_chica('AA67', 'AA76'), 0)
+
+    def test_comparar_pares(self):
+        self.assertEqual(self.mus_game.comparar_pares('RR4A','764A'),1)
+        self.assertEqual(self.mus_game.comparar_pares('RR4A', 'CC4A'), 1)
+        self.assertEqual(self.mus_game.comparar_pares('RR4A', '7AAA'), -1)
+        self.assertEqual(self.mus_game.comparar_pares('RRRA', '764A'), 1)
+        self.assertEqual(self.mus_game.comparar_pares('RR44', 'RR77'), -1)
+        self.assertEqual(self.mus_game.comparar_pares('RRR4', 'AA77'), -1)
+        self.assertEqual(self.mus_game.comparar_pares('RC44', 'RC77'), -1)
+        self.assertEqual(self.mus_game.comparar_pares('AACC', '6677'), 1)
+        self.assertEqual(self.mus_game.comparar_pares('RR54', 'RRS7'), 0)
+        self.assertEqual(self.mus_game.comparar_pares('RRR4', 'RRR7'), 0)
+        self.assertEqual(self.mus_game.comparar_pares('RS44', 'RS77'), -1)
+        self.assertEqual(self.mus_game.comparar_pares('RRCC', 'RRRR'), -1)
+
+    def test_comparar_juego(self):
+        self.assertEqual(self.mus_game.comparar_juego('RRCA','RRAA'),1)
+        self.assertEqual(self.mus_game.comparar_juego('RRCA', 'RRSA'), 0)
+        self.assertEqual(self.mus_game.comparar_juego('RRCA', '777S'), 0)
+        self.assertEqual(self.mus_game.comparar_juego('RC76', 'RSS5'), -1)
+        self.assertEqual(self.mus_game.comparar_juego('RRCS', 'RRC7'), 1)
+        self.assertEqual(self.mus_game.comparar_juego('RRCS', 'RR57'), -1)
+        self.assertEqual(self.mus_game.comparar_juego('RRAA', 'RRA4'), -1)
+        self.assertEqual(self.mus_game.comparar_juego('RR55', 'RRCA'), -1)
+        self.assertEqual(self.mus_game.comparar_juego('RR55', 'RR54'), 1)
+        self.assertEqual(self.mus_game.comparar_juego('RRC5', 'RRC4'), 1)
+        self.assertEqual(self.mus_game.comparar_juego('RRCS', 'RRCA'), -1)
+        self.assertEqual(self.mus_game.comparar_juego('4466', '775A'), 0)
+
 
 
 if __name__ == '__main__':
