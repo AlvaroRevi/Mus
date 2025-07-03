@@ -2,6 +2,7 @@ from itertools import combinations
 from math import comb
 from collections import Counter
 import pandas as pd
+import random
 
 
 class MusGame:
@@ -29,8 +30,57 @@ class MusGame:
 
     def __init__(self):
         self.manos_totales = comb(40, 4)  # Total de combinaciones posibles
+        self.matriz_probabilidades = self.__generar_matriz_probabilidades()
 
-    def generar_manos(self):
+    def analizar_mano(self,mano: str, posicion: int = 1, n_simulaciones: int = 1000):
+        """
+        Analiza una mano específica en todos los lances y muestra resultados gráficos
+
+        Args:
+            mano: String con la mano a analizar (ej. 'RRAA')
+            posicion: Posición en la mesa (1-4)
+            n_simulaciones: Número de simulaciones a realizar
+        """
+        # Crear instancia del juego
+        mus_game = MusGame()
+
+        # Generar DataFrame con todas las manos
+        df_hands = self.matriz_probabilidades
+
+        # Obtener información de la mano
+        info_mano = df_hands[df_hands['Mano'] == mano].iloc[0]
+
+        print(f"Análisis de la mano: {mano}")
+        print(f"Probabilidad de obtenerla: {info_mano['Probabilidad'] * 100:.4f}%")
+        print(f"Puntos de juego: {info_mano['Puntos_de_juego']}")
+        print(f"Tipo de pares: {info_mano['Pares']}")
+        print("\nRealizando simulaciones Monte Carlo...")
+
+        # Realizar simulación Monte Carlo
+        resultados = self.__simular_lances(mano, df_hands, posicion, n_simulaciones)
+
+        # Mostrar resultados
+        print("\nResultados de la simulación Monte Carlo:")
+        for lance in resultados:
+            print(f"\n{lance.capitalize()}:")
+            print(f"  Victoria individual: {resultados[lance]['prob_victoria_individual'] * 100:.2f}%")
+            print(f"  Victoria en equipo: {resultados[lance]['prob_victoria_equipo'] * 100:.2f}%")
+
+        return resultados
+
+    def calcular_probabilidad_mano(self, mano):
+        """
+        Calcula la probabilidad de obtener una mano específica
+        """
+        count = Counter(mano)
+        ways = 1
+
+        for card, qty in count.items():
+            ways *= comb(self.MAZO_CARTAS[card], qty)
+
+        return ways / self.manos_totales
+
+    def __generar_manos(self):
         """
         Genera todas las combinaciones únicas de 4 cartas
         """
@@ -48,25 +98,13 @@ class MusGame:
 
         return resultados
 
-    def calcular_probabilidad_mano(self, mano):
-        """
-        Calcula la probabilidad de obtener una mano específica
-        """
-        count = Counter(mano)
-        ways = 1
-
-        for card, qty in count.items():
-            ways *= comb(self.MAZO_CARTAS[card], qty)
-
-        return ways / self.manos_totales
-
-    def calcular_puntos_mano(self, mano):
+    def __calcular_puntos_mano(self, mano):
         """
         Calcula los puntos de juego de una mano
         """
         return sum(self.VALOR_CARTAS[c] for c in mano)
 
-    def calcular_pares(self, mano):
+    def __calcular_pares(self, mano):
         """
         Clasifica el tipo de jugada (Pares)
         """
@@ -84,25 +122,25 @@ class MusGame:
         else:
             return "Nada"
 
-    def ordenar_mano_para_grandes(self, mano):
+    def __ordenar_mano_para_grandes(self, mano):
         """
         Ordena una mano de mayor a menor para comparar en Grandes
         """
         return sorted(mano, key=lambda x: self.ORDEN_CARTAS.index(x))
 
-    def ordenar_mano_para_chica(self, mano):
+    def __ordenar_mano_para_chica(self, mano):
         """
         Ordena una mano de menor a mayor para comparar en Chica
         """
         return sorted(mano, key=lambda x: self.ORDEN_CARTAS.index(x), reverse=True)
 
-    def comparar_grandes(self, mano1, mano2):
+    def __comparar_grandes(self, mano1, mano2):
         """
         Compara dos manos para Grandes
         Retorna: 1 si mano1 > mano2, -1 si mano1 < mano2, 0 si empate
         """
-        cartas1 = self.ordenar_mano_para_grandes(mano1)
-        cartas2 = self.ordenar_mano_para_grandes(mano2)
+        cartas1 = self.__ordenar_mano_para_grandes(mano1)
+        cartas2 = self.__ordenar_mano_para_grandes(mano2)
 
         for c1, c2 in zip(cartas1, cartas2):
             pos1 = self.ORDEN_CARTAS.index(c1)
@@ -113,13 +151,13 @@ class MusGame:
                 return -1
         return 0
 
-    def comparar_chica(self, mano1, mano2):
+    def __comparar_chica(self, mano1, mano2):
         """
         Compara dos manos para Chica
         Retorna: 1 si mano1 > mano2, -1 si mano1 < mano2, 0 si empate
         """
-        cartas1 = self.ordenar_mano_para_chica(mano1)
-        cartas2 = self.ordenar_mano_para_chica(mano2)
+        cartas1 = self.__ordenar_mano_para_chica(mano1)
+        cartas2 = self.__ordenar_mano_para_chica(mano2)
 
         for c1, c2 in zip(cartas1, cartas2):
             pos1 = self.ORDEN_CARTAS.index(c1)
@@ -130,11 +168,11 @@ class MusGame:
                 return -1
         return 0
 
-    def obtener_valor_juego(self, mano):
+    def __obtener_valor_juego(self, mano):
         """
         Obtiene el valor de juego según las reglas: 31>32>40>37>36>35>34>33>30>29...
         """
-        puntos = self.calcular_puntos_mano(mano)
+        puntos = self.__calcular_puntos_mano(mano)
         
         # Orden de preferencia para juego (completo)
         orden_juego = [31, 32, 40, 37, 36, 35, 34, 33, 30, 29, 28, 27,
@@ -146,13 +184,13 @@ class MusGame:
         else:
             return float('inf')  # No debería ocurrir con puntos válidos
 
-    def comparar_juego(self, mano1, mano2):
+    def __comparar_juego(self, mano1, mano2):
         """
         Compara dos manos para Juego
         Retorna: 1 si mano1 > mano2, -1 si mano1 < mano2, 0 si empate
         """
-        valor1 = self.obtener_valor_juego(mano1)
-        valor2 = self.obtener_valor_juego(mano2)
+        valor1 = self.__obtener_valor_juego(mano1)
+        valor2 = self.__obtener_valor_juego(mano2)
         
         # Comparar posiciones en el array (menor posición = mejor juego)
         if valor1 < valor2:
@@ -162,12 +200,12 @@ class MusGame:
         else:
             return 0
 
-    def calcular_ranking_grandes(self, manos):
+    def __calcular_ranking_grandes(self, manos):
         """
         Calcula el ranking para Grandes
         """
         manos_list = list(manos)
-        manos_list.sort(key=lambda x: [self.ORDEN_CARTAS.index(c) for c in self.ordenar_mano_para_grandes(x)])
+        manos_list.sort(key=lambda x: [self.ORDEN_CARTAS.index(c) for c in self.__ordenar_mano_para_grandes(x)])
 
         ranking = {}
         posicion = 1
@@ -176,7 +214,7 @@ class MusGame:
             if i == 0:
                 ranking[mano] = posicion
             else:
-                if self.comparar_grandes(mano, manos_list[i-1]) == 0:
+                if self.__comparar_grandes(mano, manos_list[i - 1]) == 0:
                     # Empate, misma posición
                     ranking[mano] = ranking[manos_list[i-1]]
                 else:
@@ -186,13 +224,13 @@ class MusGame:
 
         return ranking
 
-    def calcular_ranking_chica(self, manos):
+    def __calcular_ranking_chica(self, manos):
         """
         Calcula el ranking para Chica
         """
         manos_list = list(manos)
         # Ordenar por chica: de menor a mayor (A es la mejor carta para chica)
-        manos_list.sort(key=lambda x: [self.ORDEN_CARTAS.index(c) for c in self.ordenar_mano_para_chica(x)], reverse=True)
+        manos_list.sort(key=lambda x: [self.ORDEN_CARTAS.index(c) for c in self.__ordenar_mano_para_chica(x)], reverse=True)
         
         ranking = {}
         posicion_actual = 1
@@ -201,7 +239,7 @@ class MusGame:
             if i == 0:
                 ranking[mano] = posicion_actual
             else:
-                if self.comparar_chica(mano, manos_list[i-1]) == 0:
+                if self.__comparar_chica(mano, manos_list[i-1]) == 0:
                     # Empate, misma posición
                     ranking[mano] = ranking[manos_list[i-1]]
                 else:
@@ -211,12 +249,12 @@ class MusGame:
                 
         return ranking
 
-    def calcular_ranking_pares(self, manos):
+    def __calcular_ranking_pares(self, manos):
         """
         Calcula el ranking para Pares
         """
         manos_list = list(manos)
-        manos_list.sort(key=lambda x: self.obtener_valor_par(x))
+        manos_list.sort(key=lambda x: self.__obtener_valor_par(x))
 
         ranking = {}
         posicion = 1
@@ -225,7 +263,7 @@ class MusGame:
             if i == 0:
                 ranking[mano] = posicion
             else:
-                if self.comparar_pares(mano, manos_list[i-1]) == 0:
+                if self.__comparar_pares(mano, manos_list[i - 1]) == 0:
                     # Empate, misma posición
                     ranking[mano] = ranking[manos_list[i-1]]
                 else:
@@ -235,12 +273,12 @@ class MusGame:
 
         return ranking
 
-    def calcular_ranking_juego(self, manos):
+    def __calcular_ranking_juego(self, manos):
         """
         Calcula el ranking para Juego
         """
         manos_list = list(manos)
-        manos_list.sort(key=lambda x: self.obtener_valor_juego(x))
+        manos_list.sort(key=lambda x: self.__obtener_valor_juego(x))
 
         ranking = {}
         posicion = 1
@@ -248,7 +286,7 @@ class MusGame:
             if i == 0:
                 ranking[mano] = posicion
             else:
-                if self.comparar_juego(mano, manos_list[i-1]) == 0:
+                if self.__comparar_juego(mano, manos_list[i - 1]) == 0:
                     # Empate, misma posición
                     ranking[mano] = ranking[manos_list[i-1]]
                 else:
@@ -258,7 +296,7 @@ class MusGame:
                     
         return ranking
 
-    def obtener_valor_par(self, mano):
+    def __obtener_valor_par(self, mano):
         """
         Obtiene el valor de la pareja para comparar en Pares
         Retorna: (tipo_par, valor_carta_principal, valor_carta_secundaria)
@@ -296,13 +334,13 @@ class MusGame:
             # Nada - todas las manos sin pares están empatadas
             return (3, float('inf'), float('inf'))
 
-    def comparar_pares(self, mano1, mano2):
+    def __comparar_pares(self, mano1, mano2):
         """
         Compara dos manos para Pares
         Retorna: 1 si mano1 > mano2, -1 si mano1 < mano2, 0 si empate
         """
-        valor1 = self.obtener_valor_par(mano1)
-        valor2 = self.obtener_valor_par(mano2)
+        valor1 = self.__obtener_valor_par(mano1)
+        valor2 = self.__obtener_valor_par(mano2)
         
         # Comparar tipo de par primero
         if valor1[0] < valor2[0]:
@@ -340,23 +378,23 @@ class MusGame:
                         return 0
 
 
-    def generar_matriz_probabilidades(self):
+    def __generar_matriz_probabilidades(self):
         """
         Genera el DataFrame con todas las manos y sus características
         """
-        set_manos = self.generar_manos()
+        set_manos = self.__generar_manos()
         data_manos = []
 
         # Calcular rankings para cada lance
-        ranking_grandes = self.calcular_ranking_grandes(set_manos)
-        ranking_chica = self.calcular_ranking_chica(set_manos)
-        ranking_pares = self.calcular_ranking_pares(set_manos)
-        ranking_juego = self.calcular_ranking_juego(set_manos)
+        ranking_grandes = self.__calcular_ranking_grandes(set_manos)
+        ranking_chica = self.__calcular_ranking_chica(set_manos)
+        ranking_pares = self.__calcular_ranking_pares(set_manos)
+        ranking_juego = self.__calcular_ranking_juego(set_manos)
 
         for mano in set_manos:
             prob = self.calcular_probabilidad_mano(mano)
-            points = self.calcular_puntos_mano(mano)
-            pair_type = self.calcular_pares(mano)
+            points = self.__calcular_puntos_mano(mano)
+            pair_type = self.__calcular_pares(mano)
 
             data_manos.append({
                 'Mano': mano,
@@ -373,3 +411,275 @@ class MusGame:
         df = df.sort_values(by="Probabilidad", ascending=False).reset_index(drop=True)
 
         return df
+
+    def __construir_mazo_sin(self,mano: str) -> dict[str, int]:
+        """
+        Construye un mazo de cartas reducido, excluyendo las cartas de la mano dada.
+
+        Args:
+            mano: String con las cartas de la mano (ej. 'RRAA')
+
+        Returns:
+            Diccionario con las cartas restantes y sus cantidades
+        """
+        # Mazo completo del mus (40 cartas)
+        mazo_completo = {
+            'R': 8,  # Reyes
+            'C': 4,  # Caballos
+            'S': 4,  # Sotas
+            'A': 8,  # Ases
+            '7': 4,
+            '6': 4,
+            '5': 4,
+            '4': 4
+        }
+
+        # Contar las cartas en la mano
+        contador_mano = Counter(mano)
+
+        # Reducir el mazo
+        mazo_reducido = {}
+        for carta, cantidad in mazo_completo.items():
+            cantidad_restante = cantidad - contador_mano.get(carta, 0)
+            if cantidad_restante > 0:
+                mazo_reducido[carta] = cantidad_restante
+
+        return mazo_reducido
+
+    def __repartir_3_manos(self,mazo: dict[str, int]) -> list[str]:
+        """
+        Reparte 3 manos de 4 cartas cada una a partir del mazo reducido.
+
+        Args:
+            mazo: Diccionario con las cartas disponibles y sus cantidades
+
+        Returns:
+            Lista de 3 strings, cada uno representando una mano
+        """
+        # Convertir el mazo a una lista de cartas individuales
+        cartas_disponibles = []
+        for carta, cantidad in mazo.items():
+            cartas_disponibles.extend([carta] * cantidad)
+
+        # Mezclar las cartas
+        random.shuffle(cartas_disponibles)
+
+        # Repartir las manos (4 cartas por mano)
+        manos = []
+        for i in range(3):  # 3 jugadores
+            if len(cartas_disponibles) >= 4:
+                mano = cartas_disponibles[:4]
+                cartas_disponibles = cartas_disponibles[4:]
+                manos.append(''.join(sorted(mano)))
+            else:
+                raise ValueError("No hay suficientes cartas para repartir")
+
+        return manos
+
+    def __obtener_compañero_index(self,tu_index: int) -> int:
+        """
+        Obtiene el índice del compañero basado en el índice del jugador.
+        En el mus, si el jugador es 1, el compañero es 3, si es 2, el compañero es 4, etc.
+
+        Args:
+            tu_index: Índice del jugador (1-4)
+
+        Returns:
+            Índice del compañero (1-4)
+        """
+        # Regla: compañero está a 2 posiciones (módulo 4, ajustando para base 1)
+        return ((tu_index + 1) % 4) + 1
+
+    def __obtener_ranking_grande(self,manos: list[str], df_manos: pd.DataFrame) -> dict[str, int]:
+        """
+        Obtiene el ranking de las manos para el lance de Grande.
+
+        Args:
+            manos: Lista de manos a evaluar
+            df_manos: DataFrame con la información de todas las manos posibles
+
+        Returns:
+            Diccionario con las manos como claves y su ranking como valores
+        """
+        return self.__obtener_ranking(manos, df_manos, 'Ranking_Grandes')
+
+    def __obtener_ranking_chica(self,manos: list[str], df_manos: pd.DataFrame) -> dict[str, int]:
+        """
+        Obtiene el ranking de las manos para el lance de Chica.
+
+        Args:
+            manos: Lista de manos a evaluar
+            df_manos: DataFrame con la información de todas las manos posibles
+
+        Returns:
+            Diccionario con las manos como claves y su ranking como valores
+        """
+        return self.__obtener_ranking(manos, df_manos, 'Ranking_Chica')
+
+    def __obtener_ranking_pares(self,manos: list[str], df_manos: pd.DataFrame) -> dict[str, int]:
+        """
+        Obtiene el ranking de las manos para el lance de Pares.
+
+        Args:
+            manos: Lista de manos a evaluar
+            df_manos: DataFrame con la información de todas las manos posibles
+
+        Returns:
+            Diccionario con las manos como claves y su ranking como valores
+        """
+        return self.__obtener_ranking(manos, df_manos, 'Ranking_Pares')
+
+    def __obtener_ranking_juego(self,manos: list[str], df_manos: pd.DataFrame) -> dict[str, int]:
+        """
+        Obtiene el ranking de las manos para el lance de Juego.
+
+        Args:
+            manos: Lista de manos a evaluar
+            df_manos: DataFrame con la información de todas las manos posibles
+
+        Returns:
+            Diccionario con las manos como claves y su ranking como valores
+        """
+        return self.__obtener_ranking(manos, df_manos, 'Ranking_Juego')
+
+    def __obtener_ranking(self,manos: list[str], df_manos: pd.DataFrame, columna_ranking: str) -> dict[str, int]:
+        """
+        Obtiene el ranking de las manos para un lance específico.
+
+        Args:
+            manos: Lista de manos a evaluar
+            df_manos: DataFrame con la información de todas las manos posibles
+            columna_ranking: Nombre de la columna que contiene el ranking deseado
+
+        Returns:
+            Diccionario con las manos como claves y su ranking como valores
+        """
+        # Obtener el ranking del DataFrame
+        ranking = {}
+        for mano in manos:
+            try:
+                ranking[mano] = df_manos[df_manos['Mano'] == mano][columna_ranking].values[0]
+            except IndexError:
+                # Si la mano no está en el DataFrame, ordenarla para buscarla
+                mano_ordenada = ''.join(sorted(mano, key=lambda x: "RCS7654A".index(x)))
+                ranking[mano] = df_manos[df_manos['Mano'] == mano_ordenada][columna_ranking].values[0]
+
+        return ranking
+
+    def __determinar_ganador(self,rankings: dict[str, int], orden_jugadores: list[int]) -> tuple[int, str]:
+        """
+        Determina el jugador ganador basado en los rankings y el orden de mano.
+        En caso de empate, gana el jugador con el menor número de orden.
+
+        Args:
+            rankings: Diccionario con las manos y sus rankings
+            orden_jugadores: Lista con el orden de los jugadores (1-4) para cada mano
+
+        Returns:
+            Tupla con (índice del ganador, mano ganadora)
+        """
+        # Encontrar el mejor ranking (menor número)
+        mejor_ranking = min(rankings.values())
+
+        # Encontrar todas las manos con el mejor ranking
+        mejores_manos = [mano for mano, rank in rankings.items() if rank == mejor_ranking]
+
+        if len(mejores_manos) == 1:
+            # Solo hay un ganador
+            mano_ganadora = mejores_manos[0]
+            index_ganador = list(rankings.keys()).index(mano_ganadora)
+            return orden_jugadores[index_ganador], mano_ganadora
+        else:
+            # Hay empate, gana el que tenga menor orden de mano
+            manos_empatadas = [(mano, orden_jugadores[list(rankings.keys()).index(mano)]) for mano in mejores_manos]
+            ganador = min(manos_empatadas, key=lambda x: x[1])
+            return ganador[1], ganador[0]
+
+    def __simular_lances(self,tu_mano: str, df_manos: pd.DataFrame, flag_orden, N) -> dict[str, dict[str, float]]:
+        """
+        Simula N partidas de mus para calcular la probabilidad de ganar en los 4 lances.
+
+        Args:
+            tu_mano: String con tu mano (ej. 'RRAA')
+            df_manos: DataFrame con información de todas las manos posibles
+            flag_orden: Tu posición en la mesa (1-4)
+            N: Número de simulaciones a realizar
+
+        Returns:
+            Diccionario con las probabilidades de victoria individual y de equipo para cada lance
+        """
+        # Paso 1: reducir el mazo
+        mazo_reducido = self.__construir_mazo_sin(tu_mano)
+        # Definir compañero según las reglas
+        tu_compañero = self.__obtener_compañero_index(flag_orden)
+
+        # Inicializar contadores de victorias para cada lance
+        victorias = {
+            'grandes': {'individual': 0, 'equipo': 0},
+            'chicas': {'individual': 0, 'equipo': 0},
+            'pares': {'individual': 0, 'equipo': 0},
+            'juego': {'individual': 0, 'equipo': 0}
+        }
+
+        for _ in range(N):
+            # Paso 2: Generar manos para los 3 jugadores restantes
+            manos_simuladas = self.__repartir_3_manos(mazo_reducido)
+
+            # Asignar manos a los jugadores según su posición
+            todas_manos = [tu_mano] + manos_simuladas
+
+            # Crear lista de órdenes para cada jugador (comenzando por tu posición)
+            ordenes = [0, 0, 0, 0]  # Inicializar lista
+            ordenes[0] = flag_orden  # Tu orden
+
+            # Asignar órdenes a los otros jugadores (2, 3 y 4 en sentido horario)
+            for i in range(1, 4):
+                ordenes[i] = ((flag_orden + i - 1) % 4) + 1
+
+            # Paso 3: Calcular ranking para cada lance
+            rankings_grandes = self.__obtener_ranking_grande(todas_manos, df_manos)
+            rankings_chicas = self.__obtener_ranking_chica(todas_manos, df_manos)
+            rankings_pares = self.__obtener_ranking_pares(todas_manos, df_manos)
+            rankings_juego = self.__obtener_ranking_juego(todas_manos, df_manos)
+
+            # Paso 4: Determinar ganador para cada lance
+            ganador_grandes, _ = self.__determinar_ganador(rankings_grandes, ordenes)
+            ganador_chicas, _ = self.__determinar_ganador(rankings_chicas, ordenes)
+            ganador_pares, _ = self.__determinar_ganador(rankings_pares, ordenes)
+            ganador_juego, _ = self.__determinar_ganador(rankings_juego, ordenes)
+
+            # Sumar victorias para cada lance
+            # Grandes
+            if ganador_grandes == flag_orden:
+                victorias['grandes']['individual'] += 1
+            if ganador_grandes == flag_orden or ganador_grandes == tu_compañero:
+                victorias['grandes']['equipo'] += 1
+
+            # Chicas
+            if ganador_chicas == flag_orden:
+                victorias['chicas']['individual'] += 1
+            if ganador_chicas == flag_orden or ganador_chicas == tu_compañero:
+                victorias['chicas']['equipo'] += 1
+
+            # Pares
+            if ganador_pares == flag_orden:
+                victorias['pares']['individual'] += 1
+            if ganador_pares == flag_orden or ganador_pares == tu_compañero:
+                victorias['pares']['equipo'] += 1
+
+            # Juego
+            if ganador_juego == flag_orden:
+                victorias['juego']['individual'] += 1
+            if ganador_juego == flag_orden or ganador_juego == tu_compañero:
+                victorias['juego']['equipo'] += 1
+
+        # Paso 5: Calcular probabilidades para cada lance
+        resultados = {}
+        for lance in victorias:
+            resultados[lance] = {
+                'prob_victoria_individual': victorias[lance]['individual'] / N,
+                'prob_victoria_equipo': victorias[lance]['equipo'] / N
+            }
+
+        return resultados
+
