@@ -32,7 +32,7 @@ class MusGame:
         self.manos_totales = comb(40, 4)  # Total de combinaciones posibles
         self.matriz_probabilidades = self.__generar_matriz_probabilidades()
 
-    def analizar_mano(self,mano: str, posicion: int = 1, n_simulaciones: int = 1000):
+    def simular_mano(self,mano: str, posicion: int = 1, n_simulaciones: int = 1000):
         """
         Analiza una mano específica en todos los lances y muestra resultados gráficos
 
@@ -41,30 +41,10 @@ class MusGame:
             posicion: Posición en la mesa (1-4)
             n_simulaciones: Número de simulaciones a realizar
         """
-        # Crear instancia del juego
-        mus_game = MusGame()
 
         # Generar DataFrame con todas las manos
-        df_hands = self.matriz_probabilidades
-
-        # Obtener información de la mano
-        info_mano = df_hands[df_hands['Mano'] == mano].iloc[0]
-
-        print(f"Análisis de la mano: {mano}")
-        print(f"Probabilidad de obtenerla: {info_mano['Probabilidad'] * 100:.4f}%")
-        print(f"Puntos de juego: {info_mano['Puntos_de_juego']}")
-        print(f"Tipo de pares: {info_mano['Pares']}")
-        print("\nRealizando simulaciones Monte Carlo...")
-
         # Realizar simulación Monte Carlo
-        resultados = self.__simular_lances(mano, df_hands, posicion, n_simulaciones)
-
-        # Mostrar resultados
-        print("\nResultados de la simulación Monte Carlo:")
-        for lance in resultados:
-            print(f"\n{lance.capitalize()}:")
-            print(f"  Victoria individual: {resultados[lance]['prob_victoria_individual'] * 100:.2f}%")
-            print(f"  Victoria en equipo: {resultados[lance]['prob_victoria_equipo'] * 100:.2f}%")
+        resultados = self.__simular_lances(mano, self.matriz_probabilidades, posicion, n_simulaciones)
 
         return resultados
 
