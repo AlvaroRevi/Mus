@@ -2,7 +2,7 @@ from itertools import combinations
 from math import comb
 from collections import Counter
 import pandas as pd
-import random
+import numpy as np
 
 
 class MusGame:
@@ -24,28 +24,45 @@ class MusGame:
 
     # Valores para puntos de juego
     VALOR_CARTAS = {'R': 10, 'C': 10, 'S': 10, 'A': 1, '7': 7, '6': 6, '5': 5, '4': 4}
-    
+
     # Orden de cartas para comparaciones (de mayor a menor)
     ORDEN_CARTAS = ['R', 'C', 'S', '7', '6', '5', '4', 'A']
+
+    # Orden de cartas como string para sorting
+    _ORDEN_SORT = "RCS7654A"
 
     def __init__(self):
         self.manos_totales = comb(40, 4)  # Total de combinaciones posibles
         self.matriz_probabilidades = self.__generar_matriz_probabilidades()
+        # Pre-build lookup dicts for fast simulation
+        self._ranking_lookup = self.__build_ranking_lookup()
 
-    def simular_mano(self,mano: str, posicion: int = 1, n_simulaciones: int = 1000):
+    def __build_ranking_lookup(self):
         """
-        Analiza una mano específica en todos los lances y muestra resultados gráficos
+        Pre-builds a dict {mano: (ranking_grandes, ranking_chica, ranking_pares, ranking_juego)}
+        for O(1) lookups during simulation.
+        """
+        lookup = {}
+        df = self.matriz_probabilidades
+        for _, row in df.iterrows():
+            lookup[row['Mano']] = (
+                row['Ranking_Grandes'],
+                row['Ranking_Chica'],
+                row['Ranking_Pares'],
+                row['Ranking_Juego'],
+            )
+        return lookup
+
+    def simular_mano(self, mano: str, posicion: int = 1, n_simulaciones: int = 1000):
+        """
+        Analiza una mano específica en todos los lances.
 
         Args:
             mano: String con la mano a analizar (ej. 'RRAA')
             posicion: Posición en la mesa (1-4)
             n_simulaciones: Número de simulaciones a realizar
         """
-
-        # Generar DataFrame con todas las manos
-        # Realizar simulación Monte Carlo
         resultados = self.__simular_lances(mano, self.matriz_probabilidades, posicion, n_simulaciones)
-
         return resultados
 
     def calcular_probabilidad_mano(self, mano):
@@ -426,7 +443,7 @@ class MusGame:
 
         return mazo_reducido
 
-    def __repartir_3_manos(self,mazo: dict[str, int]) -> list[str]:
+    def __repartir_3_manos(self, mazo: dict[str, int]) -> list[str]:
         """
         Reparte 3 manos de 4 cartas cada una a partir del mazo reducido.
 
@@ -436,23 +453,19 @@ class MusGame:
         Returns:
             Lista de 3 strings, cada uno representando una mano
         """
-        # Convertir el mazo a una lista de cartas individuales
         cartas_disponibles = []
         for carta, cantidad in mazo.items():
             cartas_disponibles.extend([carta] * cantidad)
 
-        # Mezclar las cartas
-        random.shuffle(cartas_disponibles)
+        # Use numpy for faster shuffling
+        indices = np.arange(len(cartas_disponibles))
+        np.random.shuffle(indices)
 
-        # Repartir las manos (4 cartas por mano)
         manos = []
-        for i in range(3):  # 3 jugadores
-            if len(cartas_disponibles) >= 4:
-                mano = cartas_disponibles[:4]
-                cartas_disponibles = cartas_disponibles[4:]
-                manos.append(''.join(sorted(mano)))
-            else:
-                raise ValueError("No hay suficientes cartas para repartir")
+        for i in range(3):
+            start = i * 4
+            mano = [cartas_disponibles[indices[start + j]] for j in range(4)]
+            manos.append(''.join(sorted(mano, key=lambda x: self._ORDEN_SORT.index(x))))
 
         return manos
 
@@ -575,9 +588,10 @@ class MusGame:
             ganador = min(manos_empatadas, key=lambda x: x[1])
             return ganador[1], ganador[0]
 
-    def __simular_lances(self,tu_mano: str, df_manos: pd.DataFrame, flag_orden, N) -> dict[str, dict[str, float]]:
+    def __simular_lances(self, tu_mano: str, df_manos: pd.DataFrame, flag_orden, N) -> dict[str, dict[str, float]]:
         """
         Simula N partidas de mus para calcular la probabilidad de ganar en los 4 lances.
+        Optimizado con lookup dicts y numpy para mayor velocidad.
 
         Args:
             tu_mano: String con tu mano (ej. 'RRAA')
@@ -588,77 +602,70 @@ class MusGame:
         Returns:
             Diccionario con las probabilidades de victoria individual y de equipo para cada lance
         """
-        # Paso 1: reducir el mazo
         mazo_reducido = self.__construir_mazo_sin(tu_mano)
-        # Definir compañero según las reglas
         tu_compañero = self.__obtener_compañero_index(flag_orden)
 
-        # Inicializar contadores de victorias para cada lance
-        victorias = {
-            'grandes': {'individual': 0, 'equipo': 0},
-            'chicas': {'individual': 0, 'equipo': 0},
-            'pares': {'individual': 0, 'equipo': 0},
-            'juego': {'individual': 0, 'equipo': 0}
-        }
+        # Pre-compute card list and your rankings once
+        cartas_disponibles = []
+        for carta, cantidad in mazo_reducido.items():
+            cartas_disponibles.extend([carta] * cantidad)
+        cartas_arr = np.array(cartas_disponibles)
+        n_cartas = len(cartas_arr)
+
+        # Your hand rankings (constant across all simulations)
+        tu_ranking = self._ranking_lookup[tu_mano]  # (grandes, chica, pares, juego)
+
+        # Pre-compute player order
+        ordenes = [flag_orden]
+        for i in range(1, 4):
+            ordenes.append(((flag_orden + i - 1) % 4) + 1)
+
+        # Counters: [grandes_ind, grandes_eq, chicas_ind, chicas_eq, pares_ind, pares_eq, juego_ind, juego_eq]
+        victorias = np.zeros(8, dtype=np.int64)
+
+        sort_key = self._ORDEN_SORT
 
         for _ in range(N):
-            # Paso 2: Generar manos para los 3 jugadores restantes
-            manos_simuladas = self.__repartir_3_manos(mazo_reducido)
+            # Shuffle and deal 3 hands of 4 cards
+            indices = np.random.permutation(n_cartas)
+            manos_sim = []
+            for i in range(3):
+                start = i * 4
+                mano_cards = [cartas_arr[indices[start + j]] for j in range(4)]
+                mano_str = ''.join(sorted(mano_cards, key=lambda x: sort_key.index(x)))
+                manos_sim.append(mano_str)
 
-            # Asignar manos a los jugadores según su posición
-            todas_manos = [tu_mano] + manos_simuladas
+            # Get rankings from pre-built lookup (O(1) per hand)
+            rankings = [tu_ranking]
+            for m in manos_sim:
+                rankings.append(self._ranking_lookup[m])
 
-            # Crear lista de órdenes para cada jugador (comenzando por tu posición)
-            ordenes = [0, 0, 0, 0]  # Inicializar lista
-            ordenes[0] = flag_orden  # Tu orden
+            # For each lance (index 0=grandes, 1=chica, 2=pares, 3=juego),
+            # find the winner (lowest ranking, ties broken by position order)
+            for lance_idx in range(4):
+                best_rank = rankings[0][lance_idx]
+                best_orden = ordenes[0]
+                for j in range(1, 4):
+                    r = rankings[j][lance_idx]
+                    o = ordenes[j]
+                    if r < best_rank or (r == best_rank and o < best_orden):
+                        best_rank = r
+                        best_orden = o
 
-            # Asignar órdenes a los otros jugadores (2, 3 y 4 en sentido horario)
-            for i in range(1, 4):
-                ordenes[i] = ((flag_orden + i - 1) % 4) + 1
+                base = lance_idx * 2
+                if best_orden == flag_orden:
+                    victorias[base] += 1      # individual
+                if best_orden == flag_orden or best_orden == tu_compañero:
+                    victorias[base + 1] += 1  # equipo
 
-            # Paso 3: Calcular ranking para cada lance
-            rankings_grandes = self.__obtener_ranking_grande(todas_manos, df_manos)
-            rankings_chicas = self.__obtener_ranking_chica(todas_manos, df_manos)
-            rankings_pares = self.__obtener_ranking_pares(todas_manos, df_manos)
-            rankings_juego = self.__obtener_ranking_juego(todas_manos, df_manos)
-
-            # Paso 4: Determinar ganador para cada lance
-            ganador_grandes, _ = self.__determinar_ganador(rankings_grandes, ordenes)
-            ganador_chicas, _ = self.__determinar_ganador(rankings_chicas, ordenes)
-            ganador_pares, _ = self.__determinar_ganador(rankings_pares, ordenes)
-            ganador_juego, _ = self.__determinar_ganador(rankings_juego, ordenes)
-
-            # Sumar victorias para cada lance
-            # Grandes
-            if ganador_grandes == flag_orden:
-                victorias['grandes']['individual'] += 1
-            if ganador_grandes == flag_orden or ganador_grandes == tu_compañero:
-                victorias['grandes']['equipo'] += 1
-
-            # Chicas
-            if ganador_chicas == flag_orden:
-                victorias['chicas']['individual'] += 1
-            if ganador_chicas == flag_orden or ganador_chicas == tu_compañero:
-                victorias['chicas']['equipo'] += 1
-
-            # Pares
-            if ganador_pares == flag_orden:
-                victorias['pares']['individual'] += 1
-            if ganador_pares == flag_orden or ganador_pares == tu_compañero:
-                victorias['pares']['equipo'] += 1
-
-            # Juego
-            if ganador_juego == flag_orden:
-                victorias['juego']['individual'] += 1
-            if ganador_juego == flag_orden or ganador_juego == tu_compañero:
-                victorias['juego']['equipo'] += 1
-
-        # Paso 5: Calcular probabilidades para cada lance
+        # Build results dict
+        lances = ['grandes', 'chicas', 'pares', 'juego']
         resultados = {}
-        for lance in victorias:
+        for i, lance in enumerate(lances):
+            base = i * 2
             resultados[lance] = {
-                'prob_victoria_individual': victorias[lance]['individual'] / N,
-                'prob_victoria_equipo': victorias[lance]['equipo'] / N
+                'prob_victoria_individual': victorias[base] / N,
+                'prob_victoria_equipo': victorias[base + 1] / N
             }
 
         return resultados
