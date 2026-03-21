@@ -18,7 +18,7 @@ class TestIntegration(unittest.TestCase):
     def test_flujo_completo_generacion_datos(self):
         """Test del flujo completo de generación de datos"""
         # Generar DataFrame
-        df = self.mus_game.__generar_matriz_probabilidades()
+        df = self.mus_game._MusGame__generar_matriz_probabilidades()
 
         # Verificar que se generó correctamente
         self.assertIsInstance(df, pd.DataFrame)
@@ -41,13 +41,13 @@ class TestIntegration(unittest.TestCase):
 
     def test_consistencia_probabilidades_totales(self):
         """Test de consistencia: suma de probabilidades debe ser 1"""
-        df = self.mus_game.__generar_matriz_probabilidades()
+        df = self.mus_game._MusGame__generar_matriz_probabilidades()
         suma_probabilidades = df['Probabilidad'].sum()
         self.assertAlmostEqual(suma_probabilidades, 1.0, places=8)
 
     def test_consistencia_rangos_puntos(self):
         """Test de consistencia: puntos deben estar en rango válido"""
-        df = self.mus_game.__generar_matriz_probabilidades()
+        df = self.mus_game._MusGame__generar_matriz_probabilidades()
 
         # Puntos mínimos: 4 ases = 4 puntos
         self.assertEqual(df['Puntos_de_juego'].min(), 4)
@@ -57,7 +57,7 @@ class TestIntegration(unittest.TestCase):
 
     def test_consistencia_distribucion_pares(self):
         """Test de consistencia: distribución de tipos de pares"""
-        df = self.mus_game.__generar_matriz_probabilidades()
+        df = self.mus_game._MusGame__generar_matriz_probabilidades()
 
         # Verificar que hay manos de todos los tipos
         tipos_pares = set(df['Pares'].unique())
@@ -72,7 +72,7 @@ class TestIntegration(unittest.TestCase):
         import time
 
         start_time = time.time()
-        manos = self.mus_game.__generar_manos()
+        manos = self.mus_game._MusGame__generar_manos()
         end_time = time.time()
 
         # Verificar que la generación es razonablemente rápida (menos de 10 segundos)
@@ -81,7 +81,7 @@ class TestIntegration(unittest.TestCase):
 
     def test_exportacion_csv(self):
         """Test de exportación a CSV"""
-        df = self.mus_game.__generar_matriz_probabilidades()
+        df = self.mus_game._MusGame__generar_matriz_probabilidades()
 
         # Crear archivo temporal
         with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as temp_file:
