@@ -51,7 +51,7 @@ class MusGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Simulador de Mus")
-        self.root.geometry("720x620")
+        self.root.geometry("780x620")
         self.root.resizable(False, False)
         self.root.configure(bg=BG_DARK)
 
@@ -124,8 +124,8 @@ class MusGUI:
         # Content area - two columns
         content = ttk.Frame(main, style='Dark.TFrame')
         content.pack(fill=tk.BOTH, expand=True)
-        content.columnconfigure(0, weight=3)
-        content.columnconfigure(1, weight=2)
+        content.columnconfigure(0, weight=11)
+        content.columnconfigure(1, weight=9)
 
         # Left column: inputs
         left = ttk.Frame(content, style='Dark.TFrame')
