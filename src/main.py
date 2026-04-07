@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
+from pathlib import Path
 from models.mus_game import MusGame
 
 # Color palette
@@ -17,6 +18,8 @@ GOLD = "#f1c40f"
 CARD_BG = "#f5f5dc"
 CARD_BORDER = "#8b4513"
 CARD_TEXT = "#2c3e50"
+BASE_DIR = Path(__file__).resolve().parent.parent
+CARD_IMAGES_DIR = BASE_DIR / "card_images"
 
 
 class MusGUI:
@@ -24,9 +27,25 @@ class MusGUI:
         'R': 'Rey', 'C': 'Caballo', 'S': 'Sota',
         'A': 'As', '7': '7', '6': '6', '5': '5', '4': '4'
     }
-    CARD_SYMBOLS = {
-        'R': '\u265a', 'C': '\u265e', 'S': '\u265d',
-        'A': '\u2660', '7': '7', '6': '6', '5': '5', '4': '4'
+    CARD_IMAGE_FILES = {
+        'R': 'R',
+        'C': 'C',
+        'S': 'S',
+        'A': 'A',
+        '7': '7',
+        '6': '6',
+        '5': '5',
+        '4': '4',
+    }
+    CARD_ART = {
+        'R': {'numero': '12', 'palo': 'Oros', 'simbolo': 'O', 'color': GOLD},
+        'C': {'numero': '11', 'palo': 'Copas', 'simbolo': 'C', 'color': ACCENT},
+        'S': {'numero': '10', 'palo': 'Espadas', 'simbolo': 'E', 'color': TEXT_PRIMARY},
+        'A': {'numero': '1', 'palo': 'Bastos', 'simbolo': 'B', 'color': GREEN},
+        '7': {'numero': '7', 'palo': 'Oros', 'simbolo': 'O', 'color': GOLD},
+        '6': {'numero': '6', 'palo': 'Copas', 'simbolo': 'C', 'color': ACCENT},
+        '5': {'numero': '5', 'palo': 'Espadas', 'simbolo': 'E', 'color': TEXT_PRIMARY},
+        '4': {'numero': '4', 'palo': 'Bastos', 'simbolo': 'B', 'color': GREEN},
     }
 
     def __init__(self, root):
@@ -38,6 +57,7 @@ class MusGUI:
 
         self.mus_game = MusGame()
         self.simulando = False
+        self.card_image_cache = {}
 
         self._configure_styles()
         self._crear_interfaz()
@@ -244,17 +264,9 @@ class MusGUI:
                 self._draw_empty_card(cards_frame, i)
 
     def _draw_card(self, parent, col, card):
-        card_frame = tk.Frame(parent, bg=CARD_BG, relief='raised', bd=1,
-                             highlightbackground=CARD_BORDER, highlightthickness=2)
+        card_frame = tk.Frame(parent, bg=BG_DARK)
         card_frame.grid(row=0, column=col, padx=4, pady=4)
-
-        symbol = self.CARD_SYMBOLS.get(card, card)
-        name = self.CARD_NAMES.get(card, card)
-
-        tk.Label(card_frame, text=symbol, font=('Segoe UI', 24),
-                bg=CARD_BG, fg=CARD_TEXT, width=3, height=1).pack(pady=(8, 0))
-        tk.Label(card_frame, text=name, font=('Segoe UI', 8),
-                bg=CARD_BG, fg=CARD_TEXT).pack(pady=(0, 8))
+        self._create_spanish_card_widget(card_frame, card, small=False).pack()
 
     def _draw_empty_card(self, parent, col):
         card_frame = tk.Frame(parent, bg=BG_INPUT, relief='flat', bd=1,
@@ -265,6 +277,79 @@ class MusGUI:
                 bg=BG_INPUT, fg=TEXT_MUTED, width=3, height=1).pack(pady=(8, 0))
         tk.Label(card_frame, text="", font=('Segoe UI', 8),
                 bg=BG_INPUT, fg=TEXT_MUTED).pack(pady=(0, 8))
+
+    def _create_spanish_card_widget(self, parent, card, small=False):
+        image = self._get_card_image(card, small=small)
+        if image is not None:
+            label = tk.Label(parent, image=image, bg=BG_DARK, bd=0, highlightthickness=0)
+            label.image = image
+            return label
+
+        art = self.CARD_ART.get(card, {
+            'numero': card,
+            'palo': 'Mus',
+            'simbolo': card,
+            'color': CARD_TEXT,
+        })
+        nombre = self.CARD_NAMES.get(card, card)
+
+        width = 74 if small else 94
+        height = 106 if small else 134
+        font_num = ('Georgia', 12 if small else 14, 'bold')
+        font_symbol = ('Georgia', 18 if small else 28, 'bold')
+        font_name = ('Segoe UI', 7 if small else 8, 'bold')
+        font_suit = ('Segoe UI', 7 if small else 8)
+
+        container = tk.Frame(parent, bg=CARD_BG, relief='raised', bd=1,
+                             highlightbackground=CARD_BORDER, highlightthickness=2)
+
+        canvas = tk.Canvas(container, width=width, height=height, bg=CARD_BG,
+                           highlightthickness=0, bd=0)
+        canvas.pack()
+
+        accent_color = art['color']
+        canvas.create_rectangle(8, 8, width - 8, height - 8, outline=accent_color, width=2)
+        canvas.create_text(18, 18, text=art['numero'], font=font_num,
+                           fill=accent_color, anchor='nw')
+        canvas.create_text(width - 18, height - 18, text=art['numero'], font=font_num,
+                           fill=accent_color, anchor='se')
+        canvas.create_text(width / 2, height / 2 - 12, text=art['simbolo'],
+                           font=font_symbol, fill=accent_color)
+        canvas.create_text(width / 2, height / 2 + 18, text=nombre,
+                           font=font_name, fill=CARD_TEXT)
+        canvas.create_text(width / 2, height / 2 + 34, text=art['palo'],
+                           font=font_suit, fill=CARD_TEXT)
+
+        return container
+
+    def _get_card_image(self, card, small=False):
+        path = self._find_card_image_path(card)
+        if path is None:
+            return None
+
+        cache_key = (card, small)
+        if cache_key in self.card_image_cache:
+            return self.card_image_cache[cache_key]
+
+        try:
+            image = tk.PhotoImage(file=str(path))
+            if small:
+                image = image.subsample(2, 2)
+            self.card_image_cache[cache_key] = image
+            return image
+        except tk.TclError:
+            return None
+
+    def _find_card_image_path(self, card):
+        base_name = self.CARD_IMAGE_FILES.get(card)
+        if not base_name:
+            return None
+
+        for extension in ('.png', '.gif', '.ppm', '.pgm'):
+            candidate = CARD_IMAGES_DIR / f"{base_name}{extension}"
+            if candidate.exists():
+                return candidate
+        return None
 
     def validar_jugada(self, jugada):
         if len(jugada) != 4:
@@ -398,11 +483,7 @@ class MusGUI:
         left_info.pack(side=tk.LEFT)
 
         for i, card in enumerate(jugada):
-            symbol = self.CARD_SYMBOLS.get(card, card)
-            lbl = tk.Label(left_info, text=f" {symbol} ",
-                          font=('Segoe UI', 16), bg=CARD_BG, fg=CARD_TEXT,
-                          relief='raised', bd=1)
-            lbl.pack(side=tk.LEFT, padx=2)
+            self._create_spanish_card_widget(left_info, card, small=True).pack(side=tk.LEFT, padx=2)
 
         right_info = tk.Frame(cards_row, bg=BG_CARD)
         right_info.pack(side=tk.RIGHT)
