@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
+import sys
 from pathlib import Path
 from models.mus_game import MusGame
 
@@ -18,8 +19,38 @@ GOLD = "#f1c40f"
 CARD_BG = "#f5f5dc"
 CARD_BORDER = "#8b4513"
 CARD_TEXT = "#2c3e50"
-BASE_DIR = Path(__file__).resolve().parent.parent
-CARD_IMAGES_DIR = BASE_DIR / "card_images"
+
+
+def _get_app_base_dir():
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent
+
+
+def _get_bundle_base_dir():
+    bundle_dir = getattr(sys, "_MEIPASS", None)
+    if bundle_dir:
+        return Path(bundle_dir)
+    return _get_app_base_dir()
+
+
+def _get_external_card_image_dirs():
+    app_dir = _get_app_base_dir()
+    dirs = [app_dir / "card_images"]
+
+    if getattr(sys, "frozen", False):
+        executable_path = Path(sys.executable).resolve()
+        if executable_path.suffix.lower() == "":
+            bundle_root = executable_path.parents[2]
+            dirs.append(bundle_root.parent / "card_images")
+
+    return dirs
+
+
+BASE_DIR = _get_app_base_dir()
+INTERNAL_BASE_DIR = _get_bundle_base_dir()
+CARD_IMAGE_DIRS = _get_external_card_image_dirs()
+FALLBACK_CARD_IMAGES_DIR = INTERNAL_BASE_DIR / "card_images"
 
 
 class MusGUI:
@@ -345,10 +376,11 @@ class MusGUI:
         if not base_name:
             return None
 
-        for extension in ('.png', '.gif', '.ppm', '.pgm'):
-            candidate = CARD_IMAGES_DIR / f"{base_name}{extension}"
-            if candidate.exists():
-                return candidate
+        for image_dir in [*CARD_IMAGE_DIRS, FALLBACK_CARD_IMAGES_DIR]:
+            for extension in ('.png', '.gif', '.ppm', '.pgm'):
+                candidate = image_dir / f"{base_name}{extension}"
+                if candidate.exists():
+                    return candidate
         return None
 
     def validar_jugada(self, jugada):
